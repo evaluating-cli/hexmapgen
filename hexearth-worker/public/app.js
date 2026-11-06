@@ -2,7 +2,7 @@
 // only a static host + CORS proxy. Imports pure algorithms from ./lib.mjs.
 import { fwd, inv, latlonToGlobalPixel, tileRange, chooseZoom,
          classify, hexCorners, clipSegment,
-         projectedBBox, layoutCanvas } from "./lib.mjs";
+         projectedBBox, layoutCanvas, buildMask, pointInMask } from "./lib.mjs";
 
 const TYPES = [
   { key: "grass",    name: "Grassland",  color: "#8bc34a" },
@@ -249,6 +249,38 @@ async function buildDEM(latmin, latmax, lonmin, lonmax) {
   }
   return { mosaic, W, H, tx0, ty0, z };
 }
+// Vector masks: Natural Earth land + lakes. Loaded once, kept in memory.
+let _masks = null;
+async function loadMasks() {
+  if (_masks) return _masks;
+  const [land, lakes] = await Promise.all([
+    fetch("/geodata/land.json").then(r => {
+      if (!r.ok) throw new Error(`land mask HTTP ${r.status}`);
+      return r.json();
+    }),
+    fetch("/geodata/lakes.json").then(r => {
+      if (!r.ok) throw new Error(`lake mask HTTP ${r.status}`);
+      return r.json();
+    }),
+  ]);
+  _masks = { land: buildMask(land.rings), lakes: buildMask(lakes.rings) };
+  return _masks;
+}
+
+// Mean elevation and relief (max-min) over the five sample points inside a hex.
+// Relief, not absolute height, is what separates mountain from hill from plain.
+function terrainStats(dem, pkx, pky, dKm, clat, clon, proj) {
+  let min = Infinity, max = -Infinity, sum = 0;
+  for (const [dx, dy] of [[0, 0], [dKm, 0], [-dKm, 0], [0, dKm], [0, -dKm]]) {
+    const [la, lo] = inv(pkx + dx, pky + dy, clat, clon, proj);
+    const e = sampleElev(dem, la, lo);
+    if (e < min) min = e;
+    if (e > max) max = e;
+    sum += e;
+  }
+  return { el: sum / 5, relief: max - min };
+}
+
 function sampleElev(dem, lat, lon) {
   const [gx, gy] = latlonToGlobalPixel(lat, lon, dem.z);
   const px = clamp((gx - dem.tx0 * 256) | 0, 0, dem.W - 1);
@@ -359,11 +391,13 @@ async function generate() {
       return [(x - xmin) * scale + padPx, (ymax - y) * scale + padPx];
     };
 
-    const [sat, dem] = await Promise.all([
+    const [sat, dem, masks] = await Promise.all([
       fetchSatellite(latmin, latmax, lonmin, lonmax).catch(() => null),
       buildDEM(latmin, latmax, lonmin, lonmax).catch(e => { console.warn("DEM failed", e); return null; }),
+      loadMasks().catch(e => { console.warn("land/lake masks unavailable:", e); return null; }),
     ]);
     if (!sat) throw new Error("Could not load satellite imagery (proxy/GIBS).");
+    if (!masks) console.warn("classifying without land/lake masks: coastline accuracy reduced");
 
     const hexes = [];
     const counts = new Array(TYPES.length).fill(0);
@@ -373,9 +407,15 @@ async function generate() {
         const pky = ymin + r * hy;
         const [la, lo] = inv(pkx, pky, clat, clon, proj);
         if (la < latmin || la > latmax || lo < lonmin || lo > lonmax) continue;
-        const [R0, G0, B0] = sampleColor(sat, la, lo);
-        const el = dem ? sampleElev(dem, la, lo) : 0;
-        const t = classify(R0, G0, B0, el);
+        const rgb = sampleColor(sat, la, lo);
+        const stats = dem ? terrainStats(dem, pkx, pky, s_km * 0.6, clat, clon, proj)
+                          : { el: 0, relief: 0 };
+        // water comes from the vectors, never from colour: Blue Marble paints
+        // the sea almost black, so its hue is quantisation noise
+        const water = masks
+          ? pointInMask(masks.lakes, lo, la) || !pointInMask(masks.land, lo, la)
+          : stats.el < 0;
+        const t = classify(rgb, stats.el, stats.relief, water);
         const [X, Y] = [(pkx - xmin) * scale + padPx, (ymax - pky) * scale + padPx];
         hexes.push({ x: X, y: Y, t });
         counts[t]++;

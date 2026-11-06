@@ -1,0 +1,649 @@
+{
+ "note": "Reference biomes for classifier regression testing. Sampled once from NASA Blue Marble (rgb, centre pixel) and the AWS Terrarium DEM (el = mean of a 3x3 grid spanning ~6 km, relief = max-min over that grid). Regenerate with tools/make-biome-fixture.py; the test itself runs offline.",
+ "points": [
+  {
+   "label": "water",
+   "name": "N Atlantic",
+   "lat": 40,
+   "lon": -40,
+   "rgb": [
+    2,
+    5,
+    20
+   ],
+   "el": 0,
+   "relief": 0
+  },
+  {
+   "label": "water",
+   "name": "Mid Pacific",
+   "lat": 0,
+   "lon": -150,
+   "rgb": [
+    2,
+    5,
+    20
+   ],
+   "el": 0,
+   "relief": 0
+  },
+  {
+   "label": "water",
+   "name": "S Pacific",
+   "lat": -30,
+   "lon": -120,
+   "rgb": [
+    2,
+    5,
+    20
+   ],
+   "el": 0,
+   "relief": 0
+  },
+  {
+   "label": "water",
+   "name": "Indian Ocean",
+   "lat": -20,
+   "lon": 80,
+   "rgb": [
+    2,
+    5,
+    20
+   ],
+   "el": 0,
+   "relief": 0
+  },
+  {
+   "label": "water",
+   "name": "S Ocean",
+   "lat": -55,
+   "lon": 0,
+   "rgb": [
+    2,
+    5,
+    20
+   ],
+   "el": 0,
+   "relief": 0
+  },
+  {
+   "label": "water",
+   "name": "N Pacific",
+   "lat": 35,
+   "lon": 170,
+   "rgb": [
+    2,
+    5,
+    20
+   ],
+   "el": 0,
+   "relief": 0
+  },
+  {
+   "label": "water",
+   "name": "Arabian Sea",
+   "lat": 15,
+   "lon": 65,
+   "rgb": [
+    2,
+    5,
+    20
+   ],
+   "el": 0,
+   "relief": 0
+  },
+  {
+   "label": "water",
+   "name": "Bay of Bengal",
+   "lat": 15,
+   "lon": 88,
+   "rgb": [
+    2,
+    5,
+    20
+   ],
+   "el": 0,
+   "relief": 0
+  },
+  {
+   "label": "water",
+   "name": "Coral Sea",
+   "lat": -15,
+   "lon": 150,
+   "rgb": [
+    2,
+    5,
+    20
+   ],
+   "el": 0,
+   "relief": 0
+  },
+  {
+   "label": "water",
+   "name": "Norwegian Sea",
+   "lat": 65,
+   "lon": 5,
+   "rgb": [
+    2,
+    5,
+    20
+   ],
+   "el": -767,
+   "relief": 30
+  },
+  {
+   "label": "water",
+   "name": "L. Superior",
+   "lat": 47.7,
+   "lon": -87.5,
+   "rgb": [
+    0,
+    2,
+    7
+   ],
+   "el": 179,
+   "relief": 0
+  },
+  {
+   "label": "water",
+   "name": "L. Victoria",
+   "lat": -1,
+   "lon": 33,
+   "rgb": [
+    3,
+    9,
+    5
+   ],
+   "el": 1134,
+   "relief": 0
+  },
+  {
+   "label": "water",
+   "name": "L. Baikal",
+   "lat": 53.5,
+   "lon": 108,
+   "rgb": [
+    0,
+    11,
+    13
+   ],
+   "el": 449,
+   "relief": 0
+  },
+  {
+   "label": "water",
+   "name": "L. Tanganyika",
+   "lat": -6,
+   "lon": 29.5,
+   "rgb": [
+    0,
+    1,
+    3
+   ],
+   "el": 767,
+   "relief": 0
+  },
+  {
+   "label": "water",
+   "name": "Great Bear L.",
+   "lat": 66,
+   "lon": -121,
+   "rgb": [
+    3,
+    13,
+    25
+   ],
+   "el": 156,
+   "relief": 0
+  },
+  {
+   "label": "water",
+   "name": "L. Ladoga",
+   "lat": 61,
+   "lon": 31.5,
+   "rgb": [
+    3,
+    7,
+    8
+   ],
+   "el": 1,
+   "relief": 0
+  },
+  {
+   "label": "water",
+   "name": "L. Michigan",
+   "lat": 44,
+   "lon": -87,
+   "rgb": [
+    0,
+    3,
+    6
+   ],
+   "el": 175,
+   "relief": 0
+  },
+  {
+   "label": "water",
+   "name": "L. Titicaca",
+   "lat": -15.8,
+   "lon": -69.4,
+   "rgb": [
+    0,
+    2,
+    1
+   ],
+   "el": 3815,
+   "relief": 0
+  },
+  {
+   "label": "water",
+   "name": "Caspian",
+   "lat": 42,
+   "lon": 50.5,
+   "rgb": [
+    0,
+    4,
+    3
+   ],
+   "el": -29,
+   "relief": 0
+  },
+  {
+   "label": "water",
+   "name": "L. Ontario",
+   "lat": 43.7,
+   "lon": -77.8,
+   "rgb": [
+    1,
+    9,
+    11
+   ],
+   "el": 73,
+   "relief": 0
+  },
+  {
+   "label": "forest",
+   "name": "Amazon",
+   "lat": -4,
+   "lon": -62,
+   "rgb": [
+    26,
+    41,
+    10
+   ],
+   "el": 28,
+   "relief": 19
+  },
+  {
+   "label": "forest",
+   "name": "Congo",
+   "lat": 1,
+   "lon": 22,
+   "rgb": [
+    29,
+    39,
+    15
+   ],
+   "el": 434,
+   "relief": 60
+  },
+  {
+   "label": "forest",
+   "name": "Borneo",
+   "lat": 0.5,
+   "lon": 114,
+   "rgb": [
+    19,
+    31,
+    7
+   ],
+   "el": 578,
+   "relief": 781
+  },
+  {
+   "label": "forest",
+   "name": "Boreal Sweden",
+   "lat": 64,
+   "lon": 18,
+   "rgb": [
+    25,
+    35,
+    11
+   ],
+   "el": 383,
+   "relief": 121
+  },
+  {
+   "label": "forest",
+   "name": "Taiga Siberia",
+   "lat": 60,
+   "lon": 100,
+   "rgb": [
+    27,
+    40,
+    14
+   ],
+   "el": 329,
+   "relief": 54
+  },
+  {
+   "label": "forest",
+   "name": "New Guinea",
+   "lat": -5,
+   "lon": 141,
+   "rgb": [
+    16,
+    26,
+    17
+   ],
+   "el": 2397,
+   "relief": 1481
+  },
+  {
+   "label": "forest",
+   "name": "Finland",
+   "lat": 63,
+   "lon": 27,
+   "rgb": [
+    17,
+    26,
+    9
+   ],
+   "el": 106,
+   "relief": 14
+  },
+  {
+   "label": "desert",
+   "name": "Sahara",
+   "lat": 23,
+   "lon": 10,
+   "rgb": [
+    204,
+    170,
+    122
+   ],
+   "el": 770,
+   "relief": 121
+  },
+  {
+   "label": "desert",
+   "name": "Rub al Khali",
+   "lat": 20,
+   "lon": 51,
+   "rgb": [
+    197,
+    168,
+    124
+   ],
+   "el": 219,
+   "relief": 17
+  },
+  {
+   "label": "desert",
+   "name": "Namib",
+   "lat": -24,
+   "lon": 15,
+   "rgb": [
+    163,
+    121,
+    79
+   ],
+   "el": 451,
+   "relief": 78
+  },
+  {
+   "label": "desert",
+   "name": "Atacama",
+   "lat": -23,
+   "lon": -69,
+   "rgb": [
+    146,
+    126,
+    101
+   ],
+   "el": 2604,
+   "relief": 380
+  },
+  {
+   "label": "desert",
+   "name": "Gobi",
+   "lat": 43,
+   "lon": 105,
+   "rgb": [
+    136,
+    110,
+    75
+   ],
+   "el": 1623,
+   "relief": 167
+  },
+  {
+   "label": "desert",
+   "name": "Simpson",
+   "lat": -25,
+   "lon": 137,
+   "rgb": [
+    146,
+    73,
+    41
+   ],
+   "el": 123,
+   "relief": 22
+  },
+  {
+   "label": "desert",
+   "name": "Mojave",
+   "lat": 35,
+   "lon": -116,
+   "rgb": [
+    130,
+    111,
+    79
+   ],
+   "el": 496,
+   "relief": 294
+  },
+  {
+   "label": "grass",
+   "name": "Kansas",
+   "lat": 38.5,
+   "lon": -99,
+   "rgb": [
+    93,
+    93,
+    57
+   ],
+   "el": 605,
+   "relief": 29
+  },
+  {
+   "label": "grass",
+   "name": "Ukrainian steppe",
+   "lat": 47,
+   "lon": 34,
+   "rgb": [
+    60,
+    64,
+    31
+   ],
+   "el": 74,
+   "relief": 8
+  },
+  {
+   "label": "grass",
+   "name": "Mongolian steppe",
+   "lat": 46,
+   "lon": 105,
+   "rgb": [
+    132,
+    113,
+    80
+   ],
+   "el": 1383,
+   "relief": 72
+  },
+  {
+   "label": "grass",
+   "name": "Pampas",
+   "lat": -35,
+   "lon": -62,
+   "rgb": [
+    57,
+    68,
+    28
+   ],
+   "el": 107,
+   "relief": 11
+  },
+  {
+   "label": "grass",
+   "name": "Cerrado",
+   "lat": -15,
+   "lon": -47,
+   "rgb": [
+    115,
+    90,
+    59
+   ],
+   "el": 579,
+   "relief": 348
+  },
+  {
+   "label": "grass",
+   "name": "Sahel",
+   "lat": 14,
+   "lon": 0,
+   "rgb": [
+    137,
+    118,
+    76
+   ],
+   "el": 284,
+   "relief": 12
+  },
+  {
+   "label": "mountain",
+   "name": "Himalaya",
+   "lat": 28,
+   "lon": 86.9,
+   "rgb": [
+    235,
+    233,
+    238
+   ],
+   "el": 6751,
+   "relief": 2437,
+   "accept": [
+    "mountain",
+    "snow"
+   ]
+  },
+  {
+   "label": "mountain",
+   "name": "Andes",
+   "lat": -32.6,
+   "lon": -70.0,
+   "rgb": [
+    198,
+    197,
+    193
+   ],
+   "el": 4810,
+   "relief": 1645,
+   "accept": [
+    "mountain",
+    "snow"
+   ]
+  },
+  {
+   "label": "mountain",
+   "name": "Rockies",
+   "lat": 39.1,
+   "lon": -106.5,
+   "rgb": [
+    81,
+    72,
+    43
+   ],
+   "el": 3571,
+   "relief": 850,
+   "accept": [
+    "mountain",
+    "snow"
+   ]
+  },
+  {
+   "label": "mountain",
+   "name": "Caucasus",
+   "lat": 43.3,
+   "lon": 42.4,
+   "rgb": [
+    225,
+    219,
+    207
+   ],
+   "el": 3440,
+   "relief": 2001,
+   "accept": [
+    "mountain",
+    "snow"
+   ]
+  },
+  {
+   "label": "mountain",
+   "name": "Alaska Range",
+   "lat": 63.1,
+   "lon": -151,
+   "rgb": [
+    124,
+    143,
+    157
+   ],
+   "el": 4568,
+   "relief": 3184,
+   "accept": [
+    "mountain",
+    "snow"
+   ]
+  },
+  {
+   "label": "snow",
+   "name": "Greenland",
+   "lat": 72,
+   "lon": -40,
+   "rgb": [
+    252,
+    254,
+    253
+   ],
+   "el": -26,
+   "relief": 15
+  },
+  {
+   "label": "snow",
+   "name": "Antarctica",
+   "lat": -75,
+   "lon": 0,
+   "rgb": [
+    240,
+    242,
+    241
+   ],
+   "el": 116,
+   "relief": 29
+  },
+  {
+   "label": "snow",
+   "name": "Vatnajokull",
+   "lat": 64.4,
+   "lon": -16.8,
+   "rgb": [
+    249,
+    249,
+    249
+   ],
+   "el": 1581,
+   "relief": 38
+  }
+ ]
+}

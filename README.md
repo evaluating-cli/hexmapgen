@@ -68,12 +68,15 @@ The app caches data on disk next to the sources (`world.jpg`, `ne_rivers.geojson
 ## How it works
 
 1. **Projection** — a centred azimuthal projection chosen by the user: Lambert Azimuthal
-   Equal-Area (`equalarea`, default) or Azimuthal Equidistant (`equidistant`).
+   Equal-Area (`equalarea`, default) or Azimuthal Equidistant (`equidistant`). The projected
+   extent is computed from sampled rectangle edges, not just the four corners.
 2. **Lattice** — pointy-top hexagons laid in the projected plane, sized so `cols` hexes span
    the region's width. Hexes whose centre falls outside the bbox are dropped.
-3. **Sampling** — one colour sample and one elevation sample per hex centre.
-4. **Classification** — colour (HSV bands) split by elevation thresholds into Grassland,
-   Forest, Hill, Mountain, Water, Desert, Snow/Ice.
+3. **Sampling** — one colour sample per hex centre, plus five elevation samples for the mean
+   and the relief (max − min) inside the cell.
+4. **Classification** — water from Natural Earth land/lake vectors; snow above the snow line;
+   mountain/hill/plain from *relief* rather than absolute altitude; desert/forest/grassland
+   from colour within the low-relief band.
 5. **Rivers** — Natural Earth centerlines clipped to the hexagons they cross and drawn as an
    overlay on top of the underlying terrain (a river hex keeps its terrain type).
 
@@ -90,10 +93,11 @@ Attribution is required for the imagery and elevation layers; see the credits li
 
 ## Known limitations
 
-- Classification is the weakest part of the project: it agrees with hand-checked biomes only
-  ~57% of the time, because colour guessing fails on near-black water and absolute elevation
-  thresholds do not generalise across latitudes. See REVIEW.md (D1–D3).
-- One pixel per hex: coarse densities can miss small features entirely.
+- Classification agrees with hand-checked reference biomes 92% of the time (it was 57% before
+  the vector masks and relief-based bands). The remaining errors are honest ones: semi-arid
+  steppe is not separable from desert by point colour, and a forested mountain is labelled
+  by landform. See REVIEW.md (D1–D3) and `test/fixtures/biomes.json`.
+- One colour pixel per hex: coarse densities can miss small features entirely.
 - The rendered canvas is capped at 940 px on its long edge.
 - Regions larger than ~70° or crossing the antimeridian are rejected.
 - v1 requires Shapely ≥ 2.0 (earlier versions make rivers silently disappear).
