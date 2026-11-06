@@ -1,0 +1,7 @@
+# hexmap/ (v1, reference implementation) — Python 3.10+
+# Shapely must be >= 2.0: rivers.py relies on STRtree.query() returning indices.
+flask>=3.0,<4
+shapely>=2.0,<4
+numpy>=1.24
+pillow>=10.0
+requests>=2.28

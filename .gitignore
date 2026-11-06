@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local caches written by hexmap/ at runtime (see hexmap/config.py)
+hexmap/world.jpg
+hexmap/ne_rivers.geojson
+hexmap/dem_cache/
+
+# Node / Workers
+node_modules/
+.wrangler/
+.dev.vars
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Review scratch space
+.review/
