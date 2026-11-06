@@ -9,6 +9,7 @@ import {
   fwd, inv, hsv,
   latlonToGlobalPixel, tileRange, chooseZoom,
   classify, hexCorners, clipSegment,
+  projectedBBox, layoutCanvas,
 } from "../public/lib.mjs";
 
 const DEG = Math.PI / 180;
@@ -128,10 +129,69 @@ test("tileRange covers a bbox and respects the Mercator domain", () => {
   assert.ok(tySouth >= 0);
 });
 
-// Known defect (REVIEW.md D12): at the Mercator latitude limit the north tile
-// index evaluates to -1, so app.js would request terrarium/{z}/{x}/-1.png.
-// Documented here so the regression is visible until the fix lands.
-test.todo("tileRange never returns a negative tile index at the Mercator limit");
+test("tileRange never leaves the tile pyramid", () => {
+  // Regression: asinh(tan(85.05112878 deg)) lands a hair past pi, so the north
+  // tile index used to evaluate to -1 and app.js requested /{z}/{x}/-1.png.
+  for (const z of [0, 1, 4, 7, 12]) {
+    const [tx0, tx1, ty0, ty1] = tileRange(80, 89, 0, 1, z);
+    assert.ok(ty0 >= 0, `ty0 ${ty0} at z${z}`);
+    assert.ok(tx0 >= 0 && tx1 >= 0 && ty1 >= 0, "no negative index");
+  }
+  // longitude 180 maps to a pixel exactly on the pyramid edge
+  const [, tx1] = tileRange(-80, 89, 179, 180, 3);
+  assert.ok(tx1 <= 2 ** 3 - 1, `tx1 ${tx1} exceeded the pyramid at z3`);
+});
+
+test("projectedBBox covers more than the corner box, by the documented margin", () => {
+  const cases = [
+    ["Alps", 43, 48, 5, 15],
+    ["Scandinavia", 55, 71, 4, 31],
+    ["New Zealand", -47, -34, 166, 179],
+  ];
+  for (const [name, latmin, latmax, lonmin, lonmax] of cases) {
+    for (const proj of ["equalarea", "equidistant"]) {
+      const dense = projectedBBox(latmin, latmax, lonmin, lonmax, proj, 64);
+      const coarse = projectedBBox(latmin, latmax, lonmin, lonmax, proj, 1);
+      assert.ok(dense.xmin <= coarse.xmin + 1e-9, `${name} xmin`);
+      assert.ok(dense.xmax >= coarse.xmax - 1e-9, `${name} xmax`);
+      assert.ok(dense.ymin <= coarse.ymin + 1e-9, `${name} ymin`);
+      assert.ok(dense.ymax >= coarse.ymax - 1e-9, `${name} ymax`);
+      // the vertical bulge is real: a few percent of region height
+      const growth = (dense.Hkm - coarse.Hkm) / dense.Hkm;
+      assert.ok(growth > 0.01 && growth < 0.06, `${name}/${proj} height growth ${growth}`);
+      // and the corners are reproduced exactly
+      const [cx, cy] = fwd(latmin, lonmin, dense.clat, dense.clon, proj);
+      assert.ok(cx >= dense.xmin - 1e-9 && cy >= dense.ymin - 1e-9);
+    }
+  }
+});
+
+test("projectedBBox is monotone in its sampling density", () => {
+  const a = projectedBBox(43, 48, 5, 15, "equalarea", 4);
+  const b = projectedBBox(43, 48, 5, 15, "equalarea", 64);
+  assert.ok(b.Hkm >= a.Hkm - 1e-9, "more samples can only expand the box");
+  assert.ok(b.Wkm >= a.Wkm - 1e-9, "more samples can only expand the box");
+});
+
+test("layoutCanvas fits the limit and reserves one hex of margin", () => {
+  for (const [Wkm, Hkm, maxPx, hexKm] of [
+    [740, 500, 940, 6.1],
+    [1200, 300, 940, 9.9],
+    [200, 900, 940, 1.6],
+    [50, 50, 940, 0.4],
+  ]) {
+    const { scale, padPx, cw, ch } = layoutCanvas(Wkm, Hkm, maxPx, hexKm);
+    assert.ok(scale > 0 && padPx > 0);
+    assert.ok(cw <= maxPx + 1, `cw ${cw} exceeds ${maxPx}`);
+    assert.ok(ch <= maxPx + 1, `ch ${ch} exceeds ${maxPx}`);
+    assert.equal(Math.max(cw, ch), Math.round(maxPx), "long edge should fill the limit");
+    // the region itself occupies exactly the canvas minus the two margins
+    near(cw - 2 * padPx, Wkm * scale, 1, "region width inside the canvas");
+    near(ch - 2 * padPx, Hkm * scale, 1, "region height inside the canvas");
+    // a hex at the very edge must be fully visible
+    assert.ok(padPx >= hexKm * scale - 1e-9, "margin smaller than one hex radius");
+  }
+});
 
 test("chooseZoom respects the tile budget and picks the coarsest acceptable zoom", () => {
   const small = chooseZoom(43, 48, 5, 15, 36);

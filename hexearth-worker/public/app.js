@@ -1,7 +1,8 @@
 // Hex Earth — client-side engine. Runs entirely in the browser; the Worker is
 // only a static host + CORS proxy. Imports pure algorithms from ./lib.mjs.
 import { fwd, inv, latlonToGlobalPixel, tileRange, chooseZoom,
-         classify, hexCorners, clipSegment } from "./lib.mjs";
+         classify, hexCorners, clipSegment,
+         projectedBBox, layoutCanvas } from "./lib.mjs";
 
 const TYPES = [
   { key: "grass",    name: "Grassland",  color: "#8bc34a" },
@@ -152,6 +153,11 @@ function showScreen(name) {
 }
 function setupWorld() { fitBase(); setSelFromLL(43, 48, 5, 15); applyZoom(); inputsFromSel(); }
 world.onload = setupWorld;
+world.onerror = () => {
+  const el = document.getElementById("boundsReadout");
+  if (el) el.textContent = "Could not load the world map — check that the Worker proxy is reachable.";
+  genbtn.disabled = true;
+};
 if (world.complete && world.naturalWidth) setupWorld();
 addEventListener("resize", () => { if (world.complete && document.getElementById("screen-region").classList.contains("active")) { fitBase(); applyZoom(); } });
 document.getElementById("zoomIn").onclick = () => zoomBy(1.4);
@@ -174,8 +180,23 @@ regenbtn.onclick = () => { document.getElementById("stats").textContent = "Gener
 // ---------------- pipeline helpers ----------------
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-async function decodeImageBitmap(url) {
-  const blob = await (await fetch(url)).blob();
+// fetch() has no timeout of its own; a stalled proxy or upstream would leave
+// the spinner spinning forever.
+async function fetchWithTimeout(url, ms) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error(`request timed out after ${ms / 1000}s`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function decodeImageBitmap(url, ms = 45000) {
+  const blob = await (await fetchWithTimeout(url, ms)).blob();
   return await createImageBitmap(blob);
 }
 function bitmapToData(bmp) {
@@ -188,9 +209,11 @@ async function fetchSatellite(latmin, latmax, lonmin, lonmax) {
   const dlat = Math.max(latmax - latmin, 1e-6), dlon = Math.max(lonmax - lonmin, 1e-6);
   let h = 700, w = Math.round(h * dlon / dlat);
   if (w * h > 1.6e6) { const f = Math.sqrt(1.6e6 / (w * h)); w = Math.round(w * f); h = Math.round(h * f); }
-  w = clamp(w, 64, 2500); h = clamp(h, 64, 2500);
+  // keep the aspect ratio, then respect the proxy's per-dimension limit
+  if (Math.max(w, h) > 2048) { const f = 2048 / Math.max(w, h); w = Math.round(w * f); h = Math.round(h * f); }
+  w = clamp(w, 64, 2048); h = clamp(h, 64, 2048);
   const url = `/proxy/satellite?latmin=${latmin}&latmax=${latmax}&lonmin=${lonmin}&lonmax=${lonmax}&w=${w}&h=${h}`;
-  const bmp = await decodeImageBitmap(url);
+  const bmp = await decodeImageBitmap(url, 60000);
   const img = bitmapToData(bmp);
   return { data: img.data, w: bmp.width, h: bmp.height, latmin, latmax, lonmin, lonmax };
 }
@@ -321,19 +344,20 @@ async function generate() {
   genbtn.disabled = true; if (regenbtn) regenbtn.disabled = true; spin.classList.add("show");
   const t0 = performance.now();
   try {
-    const clat = (latmin + latmax) / 2, clon = (lonmin + lonmax) / 2;
-    const cs = [[latmin, lonmin], [latmin, lonmax], [latmax, lonmin], [latmax, lonmax]];
-    let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity;
-    for (const [la, lo] of cs) { const [x, y] = fwd(la, lo, clat, clon, proj);
-      xmin = Math.min(xmin, x); xmax = Math.max(xmax, x); ymin = Math.min(ymin, y); ymax = Math.max(ymax, y); }
-    const Wkm = xmax - xmin, Hkm = ymax - ymin;
+    // Densified extent: the four corners alone crop the north and south edge.
+    const box = projectedBBox(latmin, latmax, lonmin, lonmax, proj);
+    const { xmin, xmax, ymin, ymax, Wkm, Hkm, clat, clon } = box;
     const s_km = Wkm / (Math.sqrt(3) * cols), hx = Math.sqrt(3) * s_km, hy = 1.5 * s_km;
     const ncols = Math.ceil(Wkm / hx) + 2, nrows = Math.ceil(Hkm / hy) + 2;
 
-    const scale = 940 / Math.max(Wkm, Hkm);
-    const cw = Math.round(Wkm * scale), ch = Math.round(Hkm * scale);
+    // One hex radius of margin so edge cells render whole instead of clipped.
+    const layout = layoutCanvas(Wkm, Hkm, 940, s_km);
+    const { scale, padPx, cw, ch } = layout;
     const size_px = s_km * scale;
-    const ll2px = (la, lo) => { const [x, y] = fwd(la, lo, clat, clon, proj); return [(x - xmin) * scale, (ymax - y) * scale]; };
+    const ll2px = (la, lo) => {
+      const [x, y] = fwd(la, lo, clat, clon, proj);
+      return [(x - xmin) * scale + padPx, (ymax - y) * scale + padPx];
+    };
 
     const [sat, dem] = await Promise.all([
       fetchSatellite(latmin, latmax, lonmin, lonmax).catch(() => null),
@@ -352,7 +376,7 @@ async function generate() {
         const [R0, G0, B0] = sampleColor(sat, la, lo);
         const el = dem ? sampleElev(dem, la, lo) : 0;
         const t = classify(R0, G0, B0, el);
-        const [X, Y] = [(pkx - xmin) * scale, (ymax - pky) * scale];
+        const [X, Y] = [(pkx - xmin) * scale + padPx, (ymax - pky) * scale + padPx];
         hexes.push({ x: X, y: Y, t });
         counts[t]++;
       }
@@ -367,11 +391,18 @@ async function generate() {
       for (const [i, segs] of overlays) { hexes[i].river = segs; river_count++; }
     } catch (e) { console.warn("rivers failed", e); }
 
+    // the backdrop must be generated at the region's own aspect ratio, not the
+    // padded canvas's, or it would be stretched when drawn inside the margin
+    const regionW = Wkm * scale, regionH = Hkm * scale;
     let backdropURL = null;
-    try { backdropURL = await buildBackdrop(sat, xmin, xmax, ymin, ymax, clat, clon, proj, cw, ch, latmin, latmax, lonmin, lonmax); }
-    catch (e) { console.warn("backdrop failed", e); }
+    try {
+      backdropURL = await buildBackdrop(sat, xmin, xmax, ymin, ymax, clat, clon, proj,
+                                        Math.round(regionW), Math.round(regionH),
+                                        latmin, latmax, lonmin, lonmax);
+    } catch (e) { console.warn("backdrop failed", e); }
 
     MAP = { hexes, size_px, cw, ch, counts, total: hexes.length, river_count,
+            pad: padPx, regionW, regionH,
             projection: proj === "equalarea" ? "Lambert Azimuthal Equal-Area" : "Azimuthal Equidistant",
             center: [+clat.toFixed(3), +clon.toFixed(3)],
             bbox: [+latmin.toFixed(3), +latmax.toFixed(3), +lonmin.toFixed(3), +lonmax.toFixed(3)] };
@@ -420,7 +451,8 @@ function drawMap() {
   const borders = document.getElementById("borders").checked;
   const showRivers = document.getElementById("rivers").checked;
   rctx.fillStyle = "#0a0e12"; rctx.fillRect(0, 0, MAP.cw, MAP.ch);
-  if (showSat) { rctx.globalAlpha = 1; rctx.drawImage(satImg, 0, 0, MAP.cw, MAP.ch); }
+  // the backdrop covers the region only; the margin is left as background
+  if (showSat) { rctx.globalAlpha = 1; rctx.drawImage(satImg, MAP.pad, MAP.pad, MAP.regionW, MAP.regionH); }
   const size = MAP.size_px, fillA = showSat ? 0.5 : 1;
   for (const h of MAP.hexes) {
     hexPath(rctx, h.x, h.y, size);
