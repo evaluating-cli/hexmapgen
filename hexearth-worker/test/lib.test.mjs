@@ -5,7 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  R, ELEV_HILL, ELEV_MOUNTAIN, ELEV_SNOW,
+  R, ELEV_SNOW, RELIEF_MOUNTAIN, RELIEF_HILL,
   fwd, inv, hsv,
   latlonToGlobalPixel, tileRange, chooseZoom,
   classify, hexCorners, clipSegment,
@@ -224,17 +224,26 @@ test("hsv returns degrees in [0,360) and normalised s/v", () => {
 
 test("classify recognises the unambiguous cases", () => {
   const cases = [
-    ["open ocean", [2, 5, 20], 0, 4],
-    ["bright snow", [245, 248, 250], 200, 6],
-    ["snow by altitude", [60, 60, 60], ELEV_SNOW + 100, 6],
-    ["desert sand", [203, 171, 122], 760, 5],
-    ["high rock", [88, 71, 43], 3773, 3],
-    ["mid rock", [130, 125, 120], ELEV_HILL + 100, 2],
-    ["lowland green", [120, 170, 90], 100, 0],
+    ["open ocean", [2, 5, 20], 0, 0, true, 4],
+    ["bright snow", [245, 248, 250], 200, 0, false, 6],
+    ["snow by altitude", [60, 60, 60], ELEV_SNOW + 100, 0, false, 6],
+    ["desert sand", [203, 171, 122], 760, 100, false, 5],
+    ["high relief rock", [88, 71, 43], 3773, RELIEF_MOUNTAIN + 400, false, 3],
+    ["mid relief", [130, 125, 120], 600, RELIEF_HILL + 100, false, 2],
+    ["lowland green", [120, 170, 90], 100, 40, false, 0],
+    ["water wins over everything", [245, 248, 250], 5000, 900, true, 4],
   ];
-  for (const [name, rgb, el, want] of cases) {
-    assert.equal(classify(...rgb, el), want, name);
+  for (const [name, rgb, el, relief, water, want] of cases) {
+    assert.equal(classify(rgb, el, relief, water), want, name);
   }
+});
+
+test("relief, not absolute altitude, decides mountain vs hill", () => {
+  // Kansas at 600 m is a plain; a 600 m alpine valley wall is not.
+  const green = [120, 170, 90];
+  assert.equal(classify(green, 600, 30, false), 0, "flat highland stays grassland");
+  assert.equal(classify(green, 600, RELIEF_HILL + 50, false), 2, "same height, hill relief");
+  assert.equal(classify(green, 600, RELIEF_MOUNTAIN + 50, false), 3, "same height, mountain relief");
 });
 
 test("classify always returns a valid type index", () => {
@@ -242,7 +251,8 @@ test("classify always returns a valid type index", () => {
   for (let i = 0; i < n; i++) {
     const rgb = [Math.random() * 255, Math.random() * 255, Math.random() * 255];
     const el = (Math.random() - 0.2) * 6000;
-    const t = classify(...rgb, el);
+    const relief = Math.random() * 1500;
+    const t = classify(rgb, el, relief, Math.random() < 0.2);
     assert.ok(Number.isInteger(t) && t >= 0 && t <= 6, `bad index ${t}`);
   }
 });

@@ -6,7 +6,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "node --test",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "fixture": "python3 tools/make-biome-fixture.py"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4",

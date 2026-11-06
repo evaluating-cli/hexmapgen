@@ -1,5 +1,9 @@
 # Hex Earth — project review
 
+> **Status:** D1–D3 (classification) are fixed in PR #3, D5/D6/D8 in PR #2, and D4 in
+> PR #1. This document is kept as the snapshot that motivated them; figures below
+> describe the code as it was reviewed.
+
 **Reviewed:** 2026-11-04 · **Scope:** `/home/p/hexmapgen` (both subprojects) · **Method:** read all ~2,370 lines of source, ran both implementations, and executed targeted experiments (details in the appendix).
 
 ---

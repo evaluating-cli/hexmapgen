@@ -2,8 +2,6 @@
 // Ported 1:1 from the Python backend (geo.py / terrain.py / rivers clipping).
 
 export const R = 6371.0;            // mean Earth radius, km
-export const ELEV_HILL = 350.0;
-export const ELEV_MOUNTAIN = 1000.0;
 export const ELEV_SNOW = 4200.0;
 
 // --- centred azimuthal projections: geographic (deg) <-> tangent plane (km) ---
@@ -108,7 +106,18 @@ export function chooseZoom(latmin, latmax, lonmin, lonmax, maxTiles = 36) {
   return 6;
 }
 
-// --- terrain classification (colour + elevation) ---
+// --- terrain classification ------------------------------------------------ //
+// Two signals decide the map:
+//   * water  — from Natural Earth vectors (land/lakes), never from colour:
+//              Blue Marble paints the sea almost black, so its hue is noise;
+//   * relief — elevation range inside the hex, which separates mountain from
+//              hill from plain far better than a global altitude threshold,
+//              because "350 m" means hill in Switzerland and plain in Kansas.
+// Colour is then only used to split low-relief land into desert / forest /
+// grassland, where it is actually informative.
+export const RELIEF_MOUNTAIN = 500; // metres of relief inside one hex
+export const RELIEF_HILL = 200;
+
 export function hsv(r, g, b) {
   const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
   const v = mx, s = mx > 0 ? (mx - mn) / mx : 0;
@@ -122,21 +131,38 @@ export function hsv(r, g, b) {
   return [h, s, v];
 }
 
-export function classify(r, g, b, el) {
-  const [h, s, v] = hsv(r, g, b);
-  const water = h >= 185 && h <= 265 && s >= 0.25;
-  const snowWhite = v >= 228 && s <= 0.18;
-  const desert = h >= 20 && h <= 58 && v >= 150 && s >= 0.15;
-  const green = h >= 65 && h <= 170 && s >= 0.20;
-  const high = el >= ELEV_MOUNTAIN;
-  const mid = el >= ELEV_HILL && !high;
-  let t = 0; // Grassland
-  if (water) t = 4;
-  else if (desert) t = 5;
-  else if (green) { t = high ? 3 : mid ? 2 : v < 80 ? 1 : 0; }
-  else { t = high ? 3 : mid ? 2 : 0; } // bare
-  if (snowWhite || el >= ELEV_SNOW) t = 6;
-  return t;
+/**
+ * @param {[number, number, number]} rgb  sampled pixel, 0..255
+ * @param {number} el      mean elevation of the hex, metres
+ * @param {number} relief  max-min elevation inside the hex, metres
+ * @param {boolean} water  true if a land/lake mask says this cell is water
+ * @returns {number} index into TYPES
+ */
+export function classify(rgb, el, relief, water) {
+  if (water) return 4;
+
+  const [h, s, v] = hsv(rgb[0], rgb[1], rgb[2]);
+
+  // snow / ice: white surface, or above the permanent snow line
+  if ((v >= 200 && s <= 0.15) || el >= ELEV_SNOW) return 6;
+
+  // Aridity is a property of the ground, not of the landform: a dry basin with
+  // 300 m of relief is still desert. Only true mountains override the colour.
+  if (relief < RELIEF_MOUNTAIN && h >= 8 && h <= 45 && s >= 0.30 && v >= 90) return 5;
+
+  const vegetation = h >= 60 && h <= 175 && s >= 0.18;
+  const canopy = vegetation && v < 60;
+
+  // landform: relief beats absolute altitude, but a densely wooded slope is
+  // still forest — only bare rock at altitude reads as mountain
+  if (relief >= RELIEF_MOUNTAIN) {
+    return canopy && relief < 1200 ? 1 : 3;
+  }
+  if (relief >= RELIEF_HILL) return 2;
+
+  // low-relief vegetation
+  if (vegetation) return canopy ? 1 : 0;
+  return v < 60 ? 1 : 0;                                        // dark bare vs grass
 }
 
 // --- hexagon geometry (pointy-top), in canvas px (y down) ---
@@ -172,6 +198,87 @@ export function clipSegment(P0, P1, poly) {
   if (tE > tL) return null;
   return [[P0[0] + tE * D[0], P0[1] + tE * D[1]],
           [P0[0] + tL * D[0], P0[1] + tL * D[1]]];
+}
+
+// --- vector masks (land / lakes) ------------------------------------------ //
+// Natural Earth rings, spatially indexed so a few thousand hex centres can be
+// tested against a few thousand rings without a linear scan each.
+//
+// Rings are flat [lon, lat, lon, lat, ...] arrays. Containment uses the
+// even-odd rule across every ring of the dataset, so polygon holes (islands in
+// lakes, lakes carved out of land) behave correctly.
+//
+// Two levels of acceleration:
+//   * a coarse lon/lat cell grid, to pick candidate rings;
+//   * per-ring latitude chunks, so a 20,000-vertex continent outline only
+//     tests the handful of vertices its scan line can actually cross.
+export function buildMask(rings, cellDeg = 2) {
+  const parsed = [];
+  const cells = new Map();
+  const CHUNK = 64;
+  for (const pts of rings) {
+    const n = pts.length / 2;
+    let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+    for (let i = 0; i < pts.length; i += 2) {
+      const lon = pts[i], lat = pts[i + 1];
+      if (lon < minLon) minLon = lon;
+      if (lon > maxLon) maxLon = lon;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+    }
+    // edge v is (v-1 -> v); chunk k owns edges [s, e) so no edge is tested twice
+    const chunks = [];
+    for (let s = 1; s < n; s += CHUNK) {
+      const e = Math.min(n, s + CHUNK);
+      let cMin = Infinity, cMax = -Infinity;
+      for (let v = s - 1; v <= e; v++) {
+        const lat = pts[v * 2 + 1];
+        if (lat < cMin) cMin = lat;
+        if (lat > cMax) cMax = lat;
+      }
+      chunks.push({ s, e, cMin, cMax });
+    }
+    const idx = parsed.length;
+    parsed.push({ pts, n, minLon, minLat, maxLon, maxLat, chunks });
+    for (let cx = Math.floor(minLon / cellDeg); cx <= Math.floor(maxLon / cellDeg); cx++) {
+      for (let cy = Math.floor(minLat / cellDeg); cy <= Math.floor(maxLat / cellDeg); cy++) {
+        const key = cx + "," + cy;
+        let list = cells.get(key);
+        if (!list) { list = []; cells.set(key, list); }
+        list.push(idx);
+      }
+    }
+  }
+  return { parsed, cells, cellDeg };
+}
+
+const crosses = (lon, lat, xj, yj, xi, yi) =>
+  (yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi;
+
+export function pointInMask(mask, lon, lat) {
+  if (!mask || !mask.parsed.length) return false;
+  const list = mask.cells.get(
+    Math.floor(lon / mask.cellDeg) + "," + Math.floor(lat / mask.cellDeg));
+  if (!list) return false;
+  let inside = false;
+  for (const idx of list) {
+    const r = mask.parsed[idx];
+    if (lon < r.minLon || lon > r.maxLon || lat < r.minLat || lat > r.maxLat) continue;
+    const pts = r.pts;
+    for (const c of r.chunks) {
+      if (lat < c.cMin || lat > c.cMax) continue;
+      for (let v = c.s; v < c.e; v++) {
+        if (crosses(lon, lat, pts[(v - 1) * 2], pts[(v - 1) * 2 + 1], pts[v * 2], pts[v * 2 + 1])) {
+          inside = !inside;
+        }
+      }
+    }
+    // the closing edge (last vertex -> first) belongs to no chunk
+    if (crosses(lon, lat, pts[(r.n - 1) * 2], pts[(r.n - 1) * 2 + 1], pts[0], pts[1])) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }
 
 // --- helpers ---
