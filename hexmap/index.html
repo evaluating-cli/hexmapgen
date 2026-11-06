@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hex Earth — Satellite Hex Map Generator</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#161c24; --panel2:#1c2530; --line:#2a3542;
+    --txt:#e6edf3; --mut:#8b9aa9; --acc:#4ea1ff; --acc2:#8bc34a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:radial-gradient(1200px 700px at 80% -10%, #1a2735 0%, var(--bg) 60%);
+    color:var(--txt); font:14px/1.45 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  }
+  header{
+    padding:14px 20px; border-bottom:1px solid var(--line);
+    display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+  }
+  header h1{font-size:18px;margin:0;letter-spacing:.3px}
+  header h1 .hex{color:var(--acc2)}
+  header .sub{color:var(--mut);font-size:12.5px}
+  .layout{display:flex;gap:16px;padding:16px;align-items:flex-start}
+  .col-left{width:380px;flex:0 0 380px;display:flex;flex-direction:column;gap:14px}
+  .col-right{flex:1;min-width:0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--mut);margin:0 0 10px}
+  .worldwrap{position:relative;width:100%;border-radius:8px;overflow:hidden;border:1px solid var(--line);user-select:none}
+  .worldwrap img{display:block;width:100%;height:auto;image-rendering:auto}
+  #overlay{position:absolute;inset:0;cursor:crosshair;touch-action:none}
+  .hint{color:var(--mut);font-size:11.5px;margin-top:8px}
+  .presets{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .presets button{
+    background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    border-radius:999px;padding:4px 10px;font-size:11.5px;cursor:pointer;transition:.15s;
+  }
+  .presets button:hover{border-color:var(--acc);color:#fff}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  label.fld{display:block;font-size:11px;color:var(--mut);margin-bottom:4px}
+  input[type=number]{width:100%;background:var(--panel2);border:1px solid var(--line);
+    color:var(--txt);border-radius:7px;padding:7px 9px;font-size:13px}
+  input[type=number]:focus{outline:none;border-color:var(--acc)}
+  .row{display:flex;align-items:center;gap:10px;margin-top:10px}
+  .row label{font-size:12px;color:var(--txt)}
+  input[type=range]{flex:1;accent-color:var(--acc)}
+  select{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    border-radius:7px;padding:7px 9px;font-size:13px;width:100%}
+  .val{color:var(--acc);font-variant-numeric:tabular-nums;min-width:34px;text-align:right}
+  button.gen{
+    width:100%;margin-top:14px;padding:12px;border:none;border-radius:10px;cursor:pointer;
+    background:linear-gradient(180deg,#54adff,#3a86e0);color:#04121f;font-weight:700;font-size:14px;
+    box-shadow:0 6px 18px rgba(78,161,255,.25);transition:.15s;
+  }
+  button.gen:hover{filter:brightness(1.07)}
+  button.gen:disabled{opacity:.5;cursor:wait}
+  .projnote{font-size:11px;color:var(--mut);margin-top:6px;line-height:1.5}
+  .toolbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+  .stats{color:var(--mut);font-size:12.5px}
+  .stats b{color:var(--txt)}
+  .toggle{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer;color:var(--txt)}
+  .toggle input{accent-color:var(--acc)}
+  .btnsm{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    border-radius:7px;padding:6px 11px;font-size:12px;cursor:pointer}
+  .btnsm:hover{border-color:var(--acc)}
+  .canvaswrap{position:relative;background:#0a0e12;border:1px solid var(--line);
+    border-radius:12px;padding:14px;display:flex;justify-content:center;align-items:center;min-height:420px;overflow:auto}
+  #result{display:block;max-width:100%;border-radius:6px}
+  .legend{display:flex;flex-wrap:wrap;gap:10px 18px;margin-top:12px}
+  .legend .item{display:flex;align-items:center;gap:7px;font-size:12px}
+  .legend .sw{width:14px;height:14px;border-radius:4px;border:1px solid rgba(255,255,255,.15)}
+  .legend .cnt{color:var(--mut);font-variant-numeric:tabular-nums}
+  .spinner{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(10,14,18,.78);border-radius:12px;z-index:5}
+  .spinner.show{display:flex}
+  .spin{width:42px;height:42px;border:4px solid var(--line);border-top-color:var(--acc);
+    border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .err{color:#ff8a80;font-size:12px;margin-top:8px;white-space:pre-wrap}
+  .emptymsg{color:var(--mut);font-size:13px;text-align:center}
+  footer{padding:10px 20px;color:var(--mut);font-size:11px;border-top:1px solid var(--line)}
+  a{color:var(--acc)}
+  @media (max-width:920px){
+    .layout{flex-direction:column}
+    .col-left{width:100%;flex:0 0 auto}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="hex">⬡</span> Hex&nbsp;Earth</h1>
+  <span class="sub">Real satellite imagery (NASA Blue Marble + Terrarium elevation) tessellated into a 7-type hex map with river overlays, in an equal-area or equidistant projection.</span>
+</header>
+
+<div class="layout">
+  <!-- LEFT: controls -->
+  <div class="col-left">
+
+    <div class="card">
+      <h2>1 · Choose a region</h2>
+      <div class="worldwrap">
+        <img id="world" src="/api/worldmap" alt="world map">
+        <canvas id="overlay"></canvas>
+      </div>
+      <div class="hint">Click &amp; drag on the map to select an area, or pick a preset below.</div>
+      <div class="presets" id="presets"></div>
+    </div>
+
+    <div class="card">
+      <h2>Region bounds (lat / lon)</h2>
+      <div class="grid2">
+        <div>
+          <label class="fld" for="lat0">South (lat °)</label>
+          <input type="number" id="lat0" step="0.5" value="43">
+        </div>
+        <div>
+          <label class="fld" for="lat1">North (lat °)</label>
+          <input type="number" id="lat1" step="0.5" value="48">
+        </div>
+        <div>
+          <label class="fld" for="lon0">West (lon °)</label>
+          <input type="number" id="lon0" step="0.5" value="5">
+        </div>
+        <div>
+          <label class="fld" for="lon1">East (lon °)</label>
+          <input type="number" id="lon1" step="0.5" value="15">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>2 · Map options</h2>
+      <div class="row">
+        <label for="cols">Hex density</label>
+        <input type="range" id="cols" min="25" max="160" value="70">
+        <span class="val" id="colsval">70</span>
+      </div>
+      <div class="row">
+        <label for="proj" style="min-width:96px">Projection</label>
+        <select id="proj">
+          <option value="equalarea">Lambert Azimuthal Equal-Area</option>
+          <option value="equidistant">Azimuthal Equidistant</option>
+        </select>
+      </div>
+      <div class="projnote" id="projnote"></div>
+      <button class="gen" id="genbtn">⬡ Generate Hex Map</button>
+      <div class="err" id="err"></div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT: result -->
+  <div class="col-right">
+    <div class="toolbar">
+      <div class="stats" id="stats">Generate a map to begin.</div>
+      <span style="flex:1"></span>
+      <label class="toggle"><input type="checkbox" id="sat" checked> Satellite</label>
+      <label class="toggle"><input type="checkbox" id="borders" checked> Borders</label>
+      <label class="toggle"><input type="checkbox" id="rivers" checked> Rivers</label>
+      <button class="btnsm" id="dl">⬇ Download PNG</button>
+    </div>
+    <div class="canvaswrap" id="canvaswrap">
+      <div class="emptymsg" id="emptymsg">Your hex map will appear here.<br>Pick a region and press <b>Generate</b>.</div>
+      <canvas id="result" style="display:none"></canvas>
+      <div class="spinner" id="spin"><div class="spin"></div></div>
+    </div>
+    <div class="legend" id="legend"></div>
+  </div>
+</div>
+
+<footer>
+  Imagery: NASA GIBS Blue Marble · Elevation: AWS Terrarium DEM · Rivers: Natural Earth 10m vectors. Land is split into Grassland/Forest/Hill/Mountain using colour + elevation; rivers are vector data drawn as overlays on whatever terrain they cross.
+  Equal-area projection preserves area (every hex ≈ equal Earth area); equidistant preserves true distance &amp; direction from the centre. No single projection is perfectly both — switch to compare.
+</footer>
+
+<script>
+// 7 base terrain types (indices match the backend classifier) + river overlay colour.
+const TYPES = [
+  {key:"grass",    name:"Grassland",  color:"#8bc34a"},
+  {key:"forest",   name:"Forest",     color:"#2e7d32"},
+  {key:"hill",     name:"Hill",       color:"#d9c27a"},
+  {key:"mountain", name:"Mountain",   color:"#8a6d4b"},
+  {key:"water",    name:"Water",      color:"#1e88e5"},
+  {key:"desert",   name:"Desert",     color:"#f4c542"},
+  {key:"snow",     name:"Snow / Ice", color:"#e6edf3"},
+];
+const RIVER_COLOR = "#2f80c8";
+
+const PRESETS = [
+  {name:"European Alps",   lat0:43, lat1:48, lon0:5,  lon1:15},
+  {name:"Nile / Red Sea",  lat0:24, lat1:33, lon0:27, lon1:35},
+  {name:"British Isles",   lat0:50, lat1:59, lon0:-11,lon1:2 },
+  {name:"Scandinavia",     lat0:55, lat1:71, lon0:4,  lon1:31},
+  {name:"Iceland",         lat0:63, lat1:67, lon0:-25,lon1:-13},
+  {name:"Himalaya",        lat0:26, lat1:34, lon0:78, lon1:92},
+  {name:"Japan",           lat0:31, lat1:45, lon0:129,lon1:146},
+  {name:"Grand Canyon",    lat0:34, lat1:38, lon0:-114,lon1:-111},
+  {name:"Sahara",          lat0:16, lat1:30, lon0:-8, lon1:18},
+  {name:"Atacama/Andes",   lat0:-27,lat1:-18,lon0:-71,lon1:-68},
+  {name:"New Zealand",     lat0:-47,lat1:-34,lon0:166,lon1:179},
+  {name:"Cape Town",       lat0:-35,lat1:-33,lon0:18, lon1:20},
+];
+
+// ---------- selection state ----------
+const sel = {x0:0.27, y0:0.22, x1:0.44, y1:0.42};
+
+const world = document.getElementById("world");
+const overlay = document.getElementById("overlay");
+const octx = overlay.getContext("2d");
+const result = document.getElementById("result");
+const rctx = result.getContext("2d");
+const emptymsg = document.getElementById("emptymsg");
+
+let MAP = null;
+let satImg = null;
+
+function llToNorm(lat, lon){ return {nx:(lon+180)/360, ny:(90-lat)/180}; }
+function normToLL(nx, ny){ return {lat:90-ny*180, lon:nx*360-180}; }
+
+function setSelFromLL(lat0,lat1,lon0,lon1){
+  const la_hi=Math.max(lat0,lat1), la_lo=Math.min(lat0,lat1);
+  const lo_lo=Math.min(lon0,lon1), lo_hi=Math.max(lon0,lon1);
+  const tl=llToNorm(la_hi, lo_lo), br=llToNorm(la_lo, lo_hi);
+  sel.x0=tl.nx; sel.y0=tl.ny; sel.x1=br.nx; sel.y1=br.ny;
+}
+function selToLL(){
+  const nx0=Math.min(sel.x0,sel.x1), nx1=Math.max(sel.x0,sel.x1);
+  const ny0=Math.min(sel.y0,sel.y1), ny1=Math.max(sel.y0,sel.y1);
+  const tl=normToLL(nx0,ny0), br=normToLL(nx1,ny1);
+  return {lat0:br.lat, lat1:tl.lat, lon0:tl.lon, lon1:br.lon};
+}
+
+function sizeOverlay(){
+  const r = world.getBoundingClientRect();
+  const dpr = window.devicePixelRatio||1;
+  overlay.style.width = r.width+"px";
+  overlay.style.height = r.height+"px";
+  overlay.width = Math.round(r.width*dpr);
+  overlay.height = Math.round(r.height*dpr);
+  octx.setTransform(dpr,0,0,dpr,0,0);
+}
+function drawSelection(){
+  const r = world.getBoundingClientRect();
+  const W=r.width, H=r.height;
+  octx.clearRect(0,0,W,H);
+  const nx0=Math.min(sel.x0,sel.x1), nx1=Math.max(sel.x0,sel.x1);
+  const ny0=Math.min(sel.y0,sel.y1), ny1=Math.max(sel.y0,sel.y1);
+  const x=nx0*W, y=ny0*H, w=(nx1-nx0)*W, h=(ny1-ny0)*H;
+  octx.fillStyle="rgba(78,161,255,0.18)"; octx.fillRect(x,y,w,h);
+  octx.lineWidth=2; octx.strokeStyle="#4ea1ff"; octx.strokeRect(x,y,w,h);
+  const ll=selToLL();
+  const txt=`${ll.lat1.toFixed(1)}°N → ${ll.lat0.toFixed(1)}°N · ${ll.lon0.toFixed(1)}°E → ${ll.lon1.toFixed(1)}°E`;
+  octx.font="11px monospace"; const tw=octx.measureText(txt).width;
+  octx.fillStyle="rgba(0,0,0,0.6)"; octx.fillRect(x, Math.max(y-18,0), tw+12, 16);
+  octx.fillStyle="#cfe6ff"; octx.fillText(txt, x+6, Math.max(y-6,12));
+}
+
+function clientToNorm(e){
+  const r = overlay.getBoundingClientRect();
+  let nx=(e.clientX-r.left)/r.width, ny=(e.clientY-r.top)/r.height;
+  return {nx:Math.min(1,Math.max(0,nx)), ny:Math.min(1,Math.max(0,ny))};
+}
+let dragging=false;
+overlay.addEventListener("pointerdown", e=>{
+  dragging=true; overlay.setPointerCapture(e.pointerId);
+  const p=clientToNorm(e); sel.x0=sel.x1=p.nx; sel.y0=sel.y1=p.ny;
+  drawSelection(); inputsFromSel();
+});
+overlay.addEventListener("pointermove", e=>{
+  if(!dragging) return;
+  const p=clientToNorm(e); sel.x1=p.nx; sel.y1=p.ny;
+  drawSelection(); inputsFromSel();
+});
+overlay.addEventListener("pointerup", ()=>{ dragging=false; });
+overlay.addEventListener("pointercancel", ()=>{ dragging=false; });
+
+function inputsFromSel(){
+  const ll=selToLL();
+  document.getElementById("lat0").value=ll.lat0.toFixed(2);
+  document.getElementById("lat1").value=ll.lat1.toFixed(2);
+  document.getElementById("lon0").value=ll.lon0.toFixed(2);
+  document.getElementById("lon1").value=ll.lon1.toFixed(2);
+}
+function selFromInputs(){
+  const lat0=parseFloat(document.getElementById("lat0").value);
+  const lat1=parseFloat(document.getElementById("lat1").value);
+  const lon0=parseFloat(document.getElementById("lon0").value);
+  const lon1=parseFloat(document.getElementById("lon1").value);
+  if([lat0,lat1,lon0,lon1].some(isNaN)) return;
+  setSelFromLL(lat0,lat1,lon0,lon1); drawSelection();
+}
+["lat0","lat1","lon0","lon1"].forEach(id=>{
+  document.getElementById(id).addEventListener("change", selFromInputs);
+});
+
+const pc = document.getElementById("presets");
+PRESETS.forEach(p=>{
+  const b=document.createElement("button");
+  b.textContent=p.name;
+  b.onclick=()=>{ setSelFromLL(p.lat0,p.lat1,p.lon0,p.lon1); inputsFromSel(); drawSelection(); };
+  pc.appendChild(b);
+});
+
+const projSel=document.getElementById("proj");
+const projNote=document.getElementById("projnote");
+function updNote(){
+  projNote.textContent = projSel.value==="equalarea"
+    ? "Equal-area: each hex represents ≈ the same true area on Earth. Best for hex tessellation."
+    : "Equidistant: true distance & direction from the region centre; hex areas vary slightly toward the edges.";
+}
+projSel.onchange=updNote; updNote();
+
+const colsEl=document.getElementById("cols");
+colsEl.oninput=()=>document.getElementById("colsval").textContent=colsEl.value;
+
+// ---------- initial map load ----------
+let autoOnce = false;
+function setupWorld(){
+  sizeOverlay(); setSelFromLL(43,48,5,15); drawSelection(); inputsFromSel();
+  if(!autoOnce){ autoOnce = true; generate(); }
+}
+world.onload = setupWorld;
+if(world.complete && world.naturalWidth){ setupWorld(); }
+window.addEventListener("resize", ()=>{ if(world.complete){ sizeOverlay(); drawSelection(); } });
+
+// ---------- generation ----------
+const genbtn=document.getElementById("genbtn");
+const spin=document.getElementById("spin");
+const errEl=document.getElementById("err");
+
+async function generate(){
+  errEl.textContent="";
+  const ll=selToLL();
+  if(Math.abs(ll.lat1-ll.lat0)<0.05 || Math.abs(ll.lon1-ll.lon0)<0.05){
+    errEl.textContent="Region too small. Drag a larger area."; return;
+  }
+  const params=new URLSearchParams({
+    lat0:ll.lat0, lat1:ll.lat1, lon0:ll.lon0, lon1:ll.lon1,
+    cols:colsEl.value, proj:projSel.value
+  });
+  genbtn.disabled=true; spin.classList.add("show");
+  try{
+    const res=await fetch("/api/generate?"+params.toString());
+    const data=await res.json();
+    if(!res.ok || data.error){ errEl.textContent=data.error||("HTTP "+res.status); return; }
+    MAP=data;
+    if(data.sat){
+      satImg=new Image();
+      satImg.onload=()=>drawMap();
+      satImg.src=data.sat;
+    } else { satImg=null; }
+    emptymsg.style.display="none";
+    result.style.display="block";
+    drawMap(); updateStats(data); buildLegend(data);
+  }catch(e){
+    errEl.textContent="Request failed: "+e.message;
+  }finally{
+    genbtn.disabled=false; spin.classList.remove("show");
+  }
+}
+genbtn.onclick=generate;
+
+// ---------- rendering ----------
+function hexPath(ctx, cx, cy, size){
+  ctx.beginPath();
+  for(let i=0;i<6;i++){
+    const a=Math.PI/180*(60*i-90);
+    const px=cx+size*Math.cos(a), py=cy+size*Math.sin(a);
+    i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+  }
+  ctx.closePath();
+}
+function shade(hex, amt){
+  const n=parseInt(hex.slice(1),16);
+  let r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  const f=amt*255;
+  r=Math.max(0,Math.min(255,Math.round(r+f)));
+  g=Math.max(0,Math.min(255,Math.round(g+f)));
+  b=Math.max(0,Math.min(255,Math.round(b+f)));
+  return "rgb("+r+","+g+","+b+")";
+}
+function drawRiver(polys){
+  for(const poly of polys){
+    rctx.beginPath();
+    poly.forEach((p,i)=> i?rctx.lineTo(p[0],p[1]):rctx.moveTo(p[0],p[1]));
+    rctx.stroke();
+  }
+}
+function drawMap(){
+  if(!MAP) return;
+  const dpr=window.devicePixelRatio||1;
+  result.width=MAP.cw*dpr; result.height=MAP.ch*dpr;
+  result.style.width=MAP.cw+"px"; result.style.height=MAP.ch+"px";
+  rctx.setTransform(dpr,0,0,dpr,0,0);
+  rctx.clearRect(0,0,MAP.cw,MAP.ch);
+
+  const showSat=document.getElementById("sat").checked && satImg && satImg.complete;
+  const borders=document.getElementById("borders").checked;
+  const showRivers=document.getElementById("rivers").checked;
+
+  rctx.fillStyle="#0a0e12"; rctx.fillRect(0,0,MAP.cw,MAP.ch);
+  if(showSat){ rctx.globalAlpha=1.0; rctx.drawImage(satImg,0,0,MAP.cw,MAP.ch); }
+
+  const size=MAP.size_px;
+  const fillAlpha=showSat?0.5:1.0;
+  // pass 1: terrain fill + borders
+  for(let i=0;i<MAP.hexes.length;i++){
+    const h=MAP.hexes[i];
+    hexPath(rctx,h.x,h.y,size);
+    rctx.globalAlpha=fillAlpha; rctx.fillStyle=TYPES[h.t].color; rctx.fill();
+    if(borders){
+      rctx.globalAlpha=showSat?0.85:1.0;
+      rctx.lineWidth=Math.max(0.5,size*0.06);
+      rctx.strokeStyle=showSat?"rgba(0,0,0,0.55)":shade(TYPES[h.t].color,-0.35);
+      rctx.stroke();
+    }
+  }
+  // pass 2: river overlays on top of terrain
+  if(showRivers){
+    const w=Math.max(1.4,size*0.26);
+    rctx.lineCap="round"; rctx.lineJoin="round";
+    for(let i=0;i<MAP.hexes.length;i++){
+      const h=MAP.hexes[i];
+      if(!h.river) continue;
+      rctx.globalAlpha=showSat?0.45:0.8; rctx.strokeStyle="#9fc4e8"; rctx.lineWidth=w*1.8; drawRiver(h.river);
+      rctx.globalAlpha=1.0; rctx.strokeStyle=RIVER_COLOR; rctx.lineWidth=w; drawRiver(h.river);
+    }
+  }
+  rctx.globalAlpha=1.0;
+}
+document.getElementById("sat").onchange=drawMap;
+document.getElementById("borders").onchange=drawMap;
+document.getElementById("rivers").onchange=drawMap;
+
+function updateStats(data){
+  const cll=data.center;
+  document.getElementById("stats").innerHTML =
+    `<b>${data.total.toLocaleString()}</b> hexes · <b>${(data.river_count||0).toLocaleString()}</b> river hexes `+
+    `· projection <b>${data.projection}</b> · centre ${cll[0]}°, ${cll[1]}° `+
+    `· bounds ${data.bbox[0]}°…${data.bbox[1]}°N, ${data.bbox[2]}°…${data.bbox[3]}°E`;
+}
+function buildLegend(data){
+  const lg=document.getElementById("legend"); lg.innerHTML="";
+  const tot=data.total||1;
+  TYPES.forEach((t,i)=>{
+    const c=data.counts[i]||0;
+    const pct=(100*c/tot).toFixed(1);
+    const d=document.createElement("div"); d.className="item";
+    d.innerHTML=`<span class="sw" style="background:${t.color}"></span>`
+      +`<span>${t.name}</span><span class="cnt">${c.toLocaleString()} (${pct}%)</span>`;
+    lg.appendChild(d);
+  });
+  const rc=data.river_count||0;
+  const rd=document.createElement("div"); rd.className="item";
+  rd.innerHTML=`<span class="sw" style="background:${RIVER_COLOR}"></span>`
+    +`<span>River (overlay)</span><span class="cnt">${rc.toLocaleString()} hexes</span>`;
+  lg.appendChild(rd);
+}
+
+document.getElementById("dl").onclick=()=>{
+  if(!MAP){ errEl.textContent="Generate a map first."; return; }
+  const a=document.createElement("a");
+  a.download="hexearth.png"; a.href=result.toDataURL("image/png"); a.click();
+};
+</script>
+</body>
+</html>

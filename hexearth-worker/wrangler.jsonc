@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hex-earth",
+  "compatibility_date": "2025-04-01",
+  "main": "src/index.ts",
+  "assets": {
+    "directory": "./public",
+    "run_worker_first": ["/proxy/*"]
+  },
+  "observability": { "enabled": true }
+}

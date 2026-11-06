@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hex Earth — Satellite Hex Map Generator</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#161c24; --panel2:#1c2530; --line:#2a3542;
+    --txt:#e6edf3; --mut:#8b9aa9; --acc:#4ea1ff; --acc2:#8bc34a;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{height:100vh;overflow:hidden;background:radial-gradient(1200px 700px at 80% -10%, #1a2735 0%, var(--bg) 60%);
+    color:var(--txt); font:14px/1.45 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+  header{height:49px;padding:0 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px}
+  header h1{font-size:17px;margin:0;letter-spacing:.3px} header h1 .hex{color:var(--acc2)}
+  header .sub{color:var(--mut);font-size:12px}
+  .screen{display:none} .screen.active{display:block;height:calc(100vh - 49px)}
+
+  /* ---------- REGION SCREEN: full-bleed map + floating controls ---------- */
+  .map-area{position:relative;width:100%;height:100%;overflow:hidden;background:#0a0e12}
+  .map-viewport{position:absolute;inset:0;overflow:auto;cursor:crosshair;touch-action:none;user-select:none}
+  .map-stage{position:relative;line-height:0;pointer-events:none;-webkit-user-drag:none;user-select:none}
+  .map-stage img{display:block;pointer-events:none;-webkit-user-drag:none;user-select:none}
+  #overlay{position:absolute;left:0;top:0;pointer-events:none}
+  .float{position:absolute;z-index:5;background:rgba(15,20,26,.82);backdrop-filter:blur(8px);
+    border:1px solid var(--line);border-radius:10px;padding:9px 11px;color:var(--txt)}
+  .float.tl{top:14px;left:14px;max-width:60vw}
+  .float.tr{top:14px;right:14px}
+  .float.bl{bottom:14px;left:14px}
+  .float.br{bottom:14px;right:14px}
+  .step{font-size:11px;text-transform:uppercase;letter-spacing:1.2px;color:var(--acc2);font-weight:700}
+  .readout{font-size:12.5px;margin-top:3px;font-variant-numeric:tabular-nums}
+  .micro-hint{font-size:11px;color:var(--mut);margin-top:3px}
+  .zoom-ctrl{display:flex;align-items:center;gap:6px}
+  .zbtn{width:30px;height:30px;border:1px solid var(--line);background:var(--panel2);color:var(--txt);border-radius:7px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;line-height:1}
+  .zbtn:hover{border-color:var(--acc);color:#fff}
+  .zoom-val{font-size:12px;color:var(--mut);min-width:42px;text-align:center;font-variant-numeric:tabular-nums}
+  /* dropdown */
+  .dropdown{position:relative}
+  .pill-btn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px 12px;font-size:13px;cursor:pointer}
+  .pill-btn:hover{border-color:var(--acc)}
+  .dropdown-menu{display:none;position:absolute;bottom:46px;left:0;min-width:190px;max-height:50vh;overflow:auto;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px;box-shadow:0 12px 30px rgba(0,0,0,.5)}
+  .dropdown-menu.open{display:block}
+  .dropdown-item{display:block;width:100%;text-align:left;background:none;border:none;color:var(--txt);
+    padding:7px 9px;border-radius:6px;font-size:13px;cursor:pointer}
+  .dropdown-item:hover{background:var(--panel2)}
+  button.gen{padding:13px 22px;border:none;border-radius:10px;cursor:pointer;
+    background:linear-gradient(180deg,#54adff,#3a86e0);color:#04121f;font-weight:700;font-size:15px;box-shadow:0 6px 18px rgba(78,161,255,.3);transition:.15s}
+  button.gen:hover{filter:brightness(1.07)} button.gen:disabled{opacity:.5;cursor:wait}
+  .err{color:#ff8a80;font-size:12px;white-space:pre-wrap}
+
+  /* ---------- MAP SCREEN ---------- */
+  .map-wrap{height:100%;overflow:auto;padding:16px}
+  .toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .stats{color:var(--mut);font-size:12.5px;min-width:0} .stats b{color:var(--txt)}
+  .spacer{flex:1 0 30px}
+  .opt-group{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .opt{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--mut)}
+  .opt input[type=range]{width:120px;accent-color:var(--acc)}
+  .opt select{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:6px 8px;font-size:12.5px}
+  .val{color:var(--acc);font-variant-numeric:tabular-nums;min-width:26px;text-align:right}
+  .toggle{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer;color:var(--txt)} .toggle input{accent-color:var(--acc)}
+  .btnsm{background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:7px;padding:7px 12px;font-size:12.5px;cursor:pointer;white-space:nowrap} .btnsm:hover{border-color:var(--acc)}
+  .canvaswrap{position:relative;background:#0a0e12;border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;justify-content:center;align-items:center;min-height:420px;overflow:auto}
+  #result{display:block;max-width:100%;border-radius:6px}
+  .legend{display:flex;flex-wrap:wrap;gap:10px 18px;margin-top:12px}
+  .legend .item{display:flex;align-items:center;gap:7px;font-size:12px}
+  .legend .sw{width:14px;height:14px;border-radius:4px;border:1px solid rgba(255,255,255,.15)}
+  .legend .cnt{color:var(--mut);font-variant-numeric:tabular-nums}
+  .credits{color:var(--mut);font-size:11px;margin-top:14px;line-height:1.5}
+  .spinner{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(10,14,18,.78);border-radius:12px;z-index:5}
+  .spinner.show{display:flex}
+  .spin{width:42px;height:42px;border:4px solid var(--line);border-top-color:var(--acc);border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="hex">⬡</span> Hex&nbsp;Earth</h1>
+  <span class="sub">Real satellite imagery → 7-type hex map with river overlays</span>
+</header>
+
+<!-- ============ SCREEN 1: REGION SELECTION (map is the main thing) ============ -->
+<section id="screen-region" class="screen active">
+  <div class="map-area">
+    <div class="map-viewport" id="viewport">
+      <div class="map-stage" id="stage">
+        <img id="world" src="/proxy/world" alt="world map" draggable="false">
+        <canvas id="overlay"></canvas>
+      </div>
+    </div>
+    <div class="float tl">
+      <div class="step">Choose a region</div>
+      <div class="readout" id="boundsReadout">Drag on the map to select</div>
+      <div class="micro-hint">Drag to select · scroll to zoom · scrollbars to pan</div>
+    </div>
+    <div class="float tr">
+      <div class="zoom-ctrl">
+        <button class="zbtn" id="zoomOut" title="Zoom out">−</button>
+        <span class="zoom-val" id="zoomVal">1.0×</span>
+        <button class="zbtn" id="zoomIn" title="Zoom in">+</button>
+        <button class="zbtn" id="zoomReset" title="Reset view">⟲</button>
+      </div>
+    </div>
+    <div class="float bl">
+      <div class="dropdown">
+        <button class="pill-btn" id="regionsBtn">Quick regions ▾</button>
+        <div class="dropdown-menu" id="regionsMenu"></div>
+      </div>
+    </div>
+    <div class="float br">
+      <button class="gen" id="genbtn">Generate Hex Map →</button>
+      <div class="err" id="err"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SCREEN 2: MAP RESULT ============ -->
+<section id="screen-map" class="screen">
+  <div class="map-wrap">
+    <div class="toolbar">
+      <button class="btnsm" id="backbtn">← Region</button>
+      <div class="stats" id="stats">Generating…</div>
+      <span class="spacer"></span>
+      <div class="opt-group">
+        <label class="opt">Density<input type="range" id="cols" min="25" max="160" value="70"><span class="val" id="colsval">70</span></label>
+        <label class="opt">Projection
+          <select id="proj"><option value="equalarea">Equal-area</option><option value="equidistant">Equidistant</option></select>
+        </label>
+        <button class="btnsm" id="regenbtn">Regenerate</button>
+      </div>
+      <label class="toggle"><input type="checkbox" id="sat" checked> Satellite</label>
+      <label class="toggle"><input type="checkbox" id="borders" checked> Borders</label>
+      <label class="toggle"><input type="checkbox" id="rivers" checked> Rivers</label>
+      <button class="btnsm" id="dl">⬇ PNG</button>
+    </div>
+    <div class="canvaswrap">
+      <canvas id="result"></canvas>
+      <div class="spinner" id="spin"><div class="spin"></div></div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="credits">
+      Imagery: NASA GIBS Blue Marble · Elevation: AWS Terrarium DEM · Rivers: Natural Earth 50m.
+      Land is split into Grassland/Forest/Hill/Mountain by colour + elevation; rivers are vector overlays on the terrain they cross.
+      Equal-area preserves area (every hex ≈ equal Earth area); equidistant preserves true distance &amp; direction from the centre.
+    </div>
+  </div>
+</section>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>
