@@ -39,6 +39,48 @@ export function inv(x, y, clat, clon, proj) {
   return [lat, lon];
 }
 
+// --- region framing ------------------------------------------------------- //
+// Exact projected extent of the lat/lon rectangle. The four corners are not
+// enough: an azimuthal projection bows the north and south edges away from the
+// centre, by 1.5% (New Zealand) to 4.9% (Scandinavia) of the region height, so
+// a corner-only box crops the top and bottom of the map.
+export function projectedBBox(latmin, latmax, lonmin, lonmax, proj, samples = 32) {
+  const clat = (latmin + latmax) / 2, clon = (lonmin + lonmax) / 2;
+  let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity;
+  const add = (la, lo) => {
+    const [x, y] = fwd(la, lo, clat, clon, proj);
+    if (x < xmin) xmin = x;
+    if (x > xmax) xmax = x;
+    if (y < ymin) ymin = y;
+    if (y > ymax) ymax = y;
+  };
+  // corners are included by the sampled edges (t = 0 and t = 1), but add them
+  // explicitly so a samples value of 0 still produces a sane box
+  add(latmin, lonmin); add(latmin, lonmax);
+  add(latmax, lonmin); add(latmax, lonmax);
+  for (let i = 0; i <= samples; i++) {
+    const t = i / samples;
+    const la = latmin + (latmax - latmin) * t;
+    const lo = lonmin + (lonmax - lonmin) * t;
+    add(la, lonmin); add(la, lonmax);   // west and east edges
+    add(latmin, lo); add(latmax, lo);   // south and north edges
+  }
+  return { xmin, xmax, ymin, ymax, Wkm: xmax - xmin, Hkm: ymax - ymin, clat, clon };
+}
+
+// Fit the projected box into a canvas of at most maxPx, leaving one hex radius
+// of margin on every side so border cells render whole instead of being cut.
+export function layoutCanvas(Wkm, Hkm, maxPx, hexSizeKm) {
+  const scale = maxPx / (Math.max(Wkm, Hkm) + 2 * hexSizeKm);
+  const padPx = hexSizeKm * scale;
+  return {
+    scale,
+    padPx,
+    cw: Math.round(Wkm * scale + 2 * padPx),
+    ch: Math.round(Hkm * scale + 2 * padPx),
+  };
+}
+
 // --- Web-Mercator tile math (for Terrarium DEM tiles) ---
 export function latlonToGlobalPixel(lat, lon, z) {
   const n = (1 << z) * 256;
@@ -51,8 +93,11 @@ export function latlonToGlobalPixel(lat, lon, z) {
 export function tileRange(latmin, latmax, lonmin, lonmax, z) {
   const [gx0, gy0] = latlonToGlobalPixel(latmax, lonmin, z);
   const [gx1, gy1] = latlonToGlobalPixel(latmin, lonmax, z);
-  return [Math.floor(gx0 / 256), Math.floor(gx1 / 256),
-          Math.floor(gy0 / 256), Math.floor(gy1 / 256)];
+  // Clamp into the tile pyramid: at the Mercator latitude limit the pixel
+  // coordinate evaluates a hair below zero, which used to ask for /-1.png.
+  const last = (1 << z) - 1;
+  const tile = (px) => Math.max(0, Math.min(last, Math.floor(px / 256)));
+  return [tile(gx0), tile(gx1), tile(gy0), tile(gy1)];
 }
 
 export function chooseZoom(latmin, latmax, lonmin, lonmax, maxTiles = 36) {
